@@ -1,6 +1,7 @@
 import { HEARTBEAT_STALE_SECONDS } from "@/lib/constants";
 import type { ChatMessageDto, RoomStateDto } from "@/lib/dto";
 import { HttpError } from "@/lib/errors";
+import { buildRoomMusicState } from "@/lib/room-music";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type RoomRow = {
@@ -175,6 +176,7 @@ async function loadStateForViewer(
     throw gameError;
   }
 
+  const music = await buildRoomMusicState(room);
   const chat = await loadChat(room.id);
   const stats = await loadStats(room.id);
 
@@ -187,12 +189,7 @@ async function loadStateForViewer(
       settings: {
         turnSeconds: room.turn_seconds,
         isHost,
-        music: {
-          trackIndex: room.music_track_index,
-          isPlaying: room.music_is_playing,
-          startedAt: room.music_started_at,
-          updatedAt: room.music_updated_at
-        }
+        music
       },
       spectatorPath: viewerRole === "player" ? `/watch/${room.code}?key=${room.spectator_code}` : null,
       players: players.map((player) => ({
@@ -261,12 +258,7 @@ async function loadStateForViewer(
     settings: {
       turnSeconds: room.turn_seconds,
       isHost,
-      music: {
-        trackIndex: room.music_track_index,
-        isPlaying: room.music_is_playing,
-        startedAt: room.music_started_at,
-        updatedAt: room.music_updated_at
-      }
+      music
     },
     spectatorPath: viewerRole === "player" ? `/watch/${room.code}?key=${room.spectator_code}` : null,
     players: players.map((player) => ({

@@ -1,6 +1,6 @@
 "use client";
 
-import { SHARED_MUSIC_TRACKS } from "@/lib/constants";
+import { SHARED_MUSIC_TRACKS, SHARED_MUSIC_TRACK_TITLES } from "@/lib/constants";
 
 type SfxKind = "click" | "success" | "error" | "turn" | "win";
 type SoundPack = "classic" | "arcade" | "soft";
@@ -10,6 +10,7 @@ export type SharedMusicStateInput = {
   isPlaying: boolean;
   startedAt: string | null;
   updatedAt: string;
+  tracks?: MusicTrack[];
 };
 
 export type MusicTrack = {
@@ -33,7 +34,7 @@ const STORAGE_SOUND_PACK = "bac_sound_pack";
 
 const BUILTIN_TRACKS: MusicTrack[] = SHARED_MUSIC_TRACKS.map((src, index) => ({
   id: `builtin-${index + 1}`,
-  title: index === 0 ? "Casap - AKIM OK PARDON (Slowed)" : "jersey_kub - new jeans jersey club remix 2 (Slowed)",
+  title: SHARED_MUSIC_TRACK_TITLES[index] ?? `Track ${index + 1}`,
   src,
   source: "builtin" as const
 }));
@@ -43,7 +44,9 @@ let musicAudio: HTMLAudioElement | null = null;
 let musicTrackIndex = 0;
 let uploadedTracks: MusicTrack[] = [];
 let uploadedObjectUrls: string[] = [];
+let sharedTracks: MusicTrack[] | null = null;
 let lastSharedUpdatedAt = "";
+let currentTrackSrc = "";
 
 const listeners = new Set<(state: MusicState) => void>();
 
@@ -52,6 +55,9 @@ function isBrowser(): boolean {
 }
 
 function getAllTracks(): MusicTrack[] {
+  if (sharedTracks?.length) {
+    return sharedTracks;
+  }
   return [...BUILTIN_TRACKS, ...uploadedTracks];
 }
 
@@ -78,6 +84,38 @@ function normalizeIndex(value: number, size: number): number {
   if (!size) return 0;
   const safe = Number.isFinite(value) ? Math.floor(value) : 0;
   return ((safe % size) + size) % size;
+}
+
+function normalizeSharedTracks(tracks: MusicTrack[] | undefined): MusicTrack[] | null {
+  if (!Array.isArray(tracks) || !tracks.length) {
+    return null;
+  }
+
+  return tracks
+    .filter((track) => typeof track?.id === "string" && typeof track?.title === "string" && typeof track?.src === "string")
+    .map((track) => ({
+      id: track.id,
+      title: track.title,
+      src: track.src,
+      source: track.source === "uploaded" ? "uploaded" : "builtin"
+    }));
+}
+
+function areTrackListsEqual(left: MusicTrack[] | null, right: MusicTrack[] | null): boolean {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  if (left.length !== right.length) return false;
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftTrack = left[index];
+    const rightTrack = right[index];
+    if (!leftTrack || !rightTrack) return false;
+    if (leftTrack.id !== rightTrack.id || leftTrack.title !== rightTrack.title || leftTrack.src !== rightTrack.src || leftTrack.source !== rightTrack.source) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function buildMusicState(): MusicState {
@@ -247,8 +285,9 @@ async function playCurrentTrack(forceReload = false): Promise<boolean> {
   const track = tracks[musicTrackIndex];
   if (!track) return false;
 
-  if (forceReload || !audio.src || !audio.src.endsWith(track.src)) {
+  if (forceReload || !currentTrackSrc || currentTrackSrc !== track.src) {
     audio.src = track.src;
+    currentTrackSrc = track.src;
     audio.currentTime = 0;
   }
 
@@ -329,20 +368,30 @@ export async function nextMusicTrack(): Promise<boolean> {
 export function applySharedMusicState(shared: SharedMusicStateInput): void {
   if (!isBrowser()) return;
   if (!shared?.updatedAt) return;
-  if (shared.updatedAt === lastSharedUpdatedAt) return;
+
+  const normalizedTracks = normalizeSharedTracks(shared.tracks);
+  let tracksChanged = false;
+  if (!areTrackListsEqual(sharedTracks, normalizedTracks)) {
+    sharedTracks = normalizedTracks;
+    tracksChanged = true;
+  }
+
+  if (shared.updatedAt === lastSharedUpdatedAt && !tracksChanged) return;
   lastSharedUpdatedAt = shared.updatedAt;
 
   const audio = ensureMusicElement();
-  if (!audio || BUILTIN_TRACKS.length === 0) return;
+  const tracks = getAllTracks();
+  if (!audio || tracks.length === 0) return;
 
-  const builtinIndex = normalizeIndex(shared.trackIndex, BUILTIN_TRACKS.length);
-  musicTrackIndex = builtinIndex;
-  const track = BUILTIN_TRACKS[builtinIndex];
+  const nextIndex = normalizeIndex(shared.trackIndex, tracks.length);
+  musicTrackIndex = nextIndex;
+  const track = tracks[nextIndex];
   if (!track) return;
 
-  const mustReload = !audio.src || !audio.src.endsWith(track.src);
+  const mustReload = tracksChanged || !currentTrackSrc || currentTrackSrc !== track.src;
   if (mustReload) {
     audio.src = track.src;
+    currentTrackSrc = track.src;
   }
 
   if (!shared.isPlaying) {
@@ -360,6 +409,24 @@ export function applySharedMusicState(shared: SharedMusicStateInput): void {
     window.localStorage.setItem(STORAGE_MUSIC_ENABLED, "1");
   }
   void audio.play().catch(() => null);
+  notifyMusicState();
+}
+
+export function clearSharedMusicState(): void {
+  if (!sharedTracks) {
+    return;
+  }
+
+  sharedTracks = null;
+  lastSharedUpdatedAt = "";
+  const tracks = getAllTracks();
+  musicTrackIndex = normalizeIndex(musicTrackIndex, tracks.length || 1);
+
+  if (musicAudio && !musicAudio.paused) {
+    void playCurrentTrack(true);
+    return;
+  }
+
   notifyMusicState();
 }
 
@@ -418,5 +485,6 @@ export function disposeUploadedTracks() {
   uploadedObjectUrls = [];
   uploadedTracks = [];
   musicTrackIndex = 0;
+  currentTrackSrc = "";
   notifyMusicState();
 }

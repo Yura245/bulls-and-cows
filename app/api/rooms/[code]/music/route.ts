@@ -3,6 +3,7 @@ import { addRoomEvent } from "@/lib/events";
 import { HttpError } from "@/lib/errors";
 import { fromError, ok } from "@/lib/http";
 import { readJsonBody } from "@/lib/request";
+import { buildRoomMusicState, getRoomMusicTrackCount } from "@/lib/room-music";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ensureMusicAction, normalizeRoomCode, normalizeTrackIndex } from "@/lib/validators";
 
@@ -17,7 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ code: 
 
     const { data: roomData, error: roomError } = await admin
       .from("rooms")
-      .select("id, spectator_code, music_track_index, music_is_playing")
+      .select("id, spectator_code, music_track_index, music_is_playing, music_started_at, music_updated_at")
       .eq("code", roomCode)
       .maybeSingle();
 
@@ -26,6 +27,8 @@ export async function POST(request: Request, context: { params: Promise<{ code: 
       spectator_code: string;
       music_track_index: number;
       music_is_playing: boolean;
+      music_started_at: string | null;
+      music_updated_at: string;
     } | null;
 
     if (roomError) {
@@ -65,13 +68,14 @@ export async function POST(request: Request, context: { params: Promise<{ code: 
       actor = "spectator";
     }
 
-    let nextTrackIndex = normalizeTrackIndex(room.music_track_index);
+    const trackCount = await getRoomMusicTrackCount(room.id);
+    let nextTrackIndex = normalizeTrackIndex(room.music_track_index, trackCount);
     let isPlaying = room.music_is_playing;
     let startedAt: string | null = null;
     const updatedAt = new Date().toISOString();
 
     if (action === "next") {
-      nextTrackIndex = normalizeTrackIndex(nextTrackIndex + 1);
+      nextTrackIndex = normalizeTrackIndex(nextTrackIndex + 1, trackCount);
       isPlaying = true;
       startedAt = updatedAt;
     } else {
@@ -100,14 +104,17 @@ export async function POST(request: Request, context: { params: Promise<{ code: 
       isPlaying
     });
 
+    const music = await buildRoomMusicState({
+      id: room.id,
+      music_track_index: nextTrackIndex,
+      music_is_playing: isPlaying,
+      music_started_at: startedAt,
+      music_updated_at: updatedAt
+    });
+
     return ok({
       ok: true,
-      music: {
-        trackIndex: nextTrackIndex,
-        isPlaying,
-        startedAt,
-        updatedAt
-      }
+      music
     });
   } catch (error) {
     return fromError(error);

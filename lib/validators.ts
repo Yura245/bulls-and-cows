@@ -62,8 +62,10 @@ export function ensureMusicAction(value: unknown): "toggle" | "next" {
   return action;
 }
 
-export function normalizeTrackIndex(value: number): number {
-  const trackCount = SHARED_MUSIC_TRACKS.length;
+export function normalizeTrackIndex(value: number, trackCount: number = SHARED_MUSIC_TRACKS.length): number {
+  if (trackCount <= 0) {
+    return 0;
+  }
   if (!Number.isFinite(value)) {
     return 0;
   }

@@ -22,6 +22,13 @@ export type GuessDto = {
   createdAt: string;
 };
 
+export type MusicTrackDto = {
+  id: string;
+  title: string;
+  src: string;
+  source: "builtin" | "uploaded";
+};
+
 export type GameDto = {
   id: string;
   roundNo: number;
@@ -53,6 +60,7 @@ export type RoomStateDto = {
       isPlaying: boolean;
       startedAt: string | null;
       updatedAt: string;
+      tracks: MusicTrackDto[];
     };
   };
   spectatorPath: string | null;

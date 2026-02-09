@@ -25,9 +25,12 @@ export async function ensureAnonymousSession() {
 
 export async function authorizedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const session = await ensureAnonymousSession();
-  const headers = new Headers(DEFAULT_HEADERS);
+  const headers = new Headers();
   if (init?.headers) {
     new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  }
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    new Headers(DEFAULT_HEADERS).forEach((value, key) => headers.set(key, value));
   }
   headers.set("Authorization", `Bearer ${session.access_token}`);
 
