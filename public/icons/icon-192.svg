@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="Быки и коровы">
+  <rect width="192" height="192" rx="36" fill="#cb5b2f"/>
+  <rect x="16" y="16" width="160" height="160" rx="28" fill="#f6f4ef"/>
+  <path d="M44 74c0-13 10-24 24-24h56c14 0 24 11 24 24v44c0 13-10 24-24 24H68c-14 0-24-11-24-24z" fill="#cb5b2f"/>
+  <path d="M69 58l-15 10M123 58l15 10" stroke="#cb5b2f" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="78" cy="96" r="8" fill="#f6f4ef"/>
+  <circle cx="114" cy="96" r="8" fill="#f6f4ef"/>
+  <rect x="82" y="114" width="28" height="10" rx="5" fill="#f6f4ef"/>
+</svg>

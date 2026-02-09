@@ -50,9 +50,7 @@ export function WatchPage({ code, spectatorKey }: Props) {
         setError(message);
         pushToast(message, "error");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
     void run();
@@ -68,12 +66,12 @@ export function WatchPage({ code, spectatorKey }: Props) {
     return () => window.clearInterval(interval);
   }, [fetchState]);
 
-  const myTurns = useMemo(() => {
+  const turns1 = useMemo(() => {
     if (!state?.game) return [] as TurnItem[];
     return state.game.history.filter((turn) => turn.guesserSeat === 1);
   }, [state]);
 
-  const opponentTurns = useMemo(() => {
+  const turns2 = useMemo(() => {
     if (!state?.game) return [] as TurnItem[];
     return state.game.history.filter((turn) => turn.guesserSeat === 2);
   }, [state]);
@@ -102,63 +100,65 @@ export function WatchPage({ code, spectatorKey }: Props) {
       </section>
 
       <UiControls />
-
       {error ? <p className="error">{error}</p> : null}
 
       {state ? (
-        <>
-          <section className="card" style={{ marginBottom: 14 }}>
-            <h2 className="section-title">Игроки</h2>
-            <div className="players-grid">
-              {state.players.map((player) => (
-                <div key={player.seat} className="mini-card">
-                  <strong>
-                    Игрок {player.seat}: {player.name}
-                  </strong>
-                  <span className={player.online ? "online" : "offline"}>{player.online ? "онлайн" : "не в сети"}</span>
+        <div className="room-layout">
+          <div className="room-main">
+            <section className="card" style={{ marginBottom: 14 }}>
+              <h2 className="section-title">Ходы игроков</h2>
+              <div className="split-turns">
+                <div className="mini-card">
+                  <strong>Игрок 1 ({turns1.length})</strong>
+                  <ul className="history">
+                    {turns1.map((turn) => (
+                      <li key={`s1-${turn.turnNo}`}>
+                        #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="card" style={{ marginBottom: 14 }}>
-            <h2 className="section-title">Ходы игроков</h2>
-            <div className="split-turns">
-              <div className="mini-card">
-                <strong>Игрок 1 ({myTurns.length})</strong>
-                <ul className="history">
-                  {myTurns.map((turn) => (
-                    <li key={`s1-${turn.turnNo}`}>
-                      #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
-                    </li>
-                  ))}
-                </ul>
+                <div className="mini-card">
+                  <strong>Игрок 2 ({turns2.length})</strong>
+                  <ul className="history">
+                    {turns2.map((turn) => (
+                      <li key={`s2-${turn.turnNo}`}>
+                        #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <div className="mini-card">
-                <strong>Игрок 2 ({opponentTurns.length})</strong>
-                <ul className="history">
-                  {opponentTurns.map((turn) => (
-                    <li key={`s2-${turn.turnNo}`}>
-                      #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
-                    </li>
-                  ))}
-                </ul>
+            </section>
+          </div>
+          <aside className="room-side">
+            <section className="card" style={{ marginBottom: 14 }}>
+              <h2 className="section-title">Игроки</h2>
+              <div className="players-grid">
+                {state.players.map((player) => (
+                  <div key={player.seat} className="mini-card">
+                    <strong>
+                      Игрок {player.seat}: {player.name}
+                    </strong>
+                    <span className={player.online ? "online" : "offline"}>{player.online ? "онлайн" : "не в сети"}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="card" style={{ marginBottom: 14 }}>
-            <h2 className="section-title">Чат комнаты</h2>
-            <ul className="chat-list">
-              {state.chat.map((message) => (
-                <li key={message.id}>
-                  <strong>{message.author}:</strong> {message.text}
-                </li>
-              ))}
-              {!state.chat.length ? <li className="hint">Пока сообщений нет.</li> : null}
-            </ul>
-          </section>
-        </>
+            <section className="card" style={{ marginBottom: 14 }}>
+              <h2 className="section-title">Чат комнаты</h2>
+              <ul className="chat-list">
+                {state.chat.map((message) => (
+                  <li key={message.id}>
+                    <strong>{message.author}:</strong> {message.text}
+                  </li>
+                ))}
+                {!state.chat.length ? <li className="hint">Пока сообщений нет.</li> : null}
+              </ul>
+            </section>
+          </aside>
+        </div>
       ) : null}
     </main>
   );

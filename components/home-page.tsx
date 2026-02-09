@@ -3,9 +3,12 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
+import { SocialSummary } from "@/components/social-summary";
 import { ToastRegion } from "@/components/toast-region";
 import { UiControls } from "@/components/ui-controls";
 import { authorizedFetch, ensureAnonymousSession, parseJsonResponse } from "@/lib/browser-auth";
+import { getFriends, getMatchHistory } from "@/lib/local-social";
+import { playSfx } from "@/lib/sound";
 import { useToastQueue } from "@/lib/use-toast-queue";
 
 const NAME_STORAGE_KEY = "bac_display_name";
@@ -31,6 +34,8 @@ export function HomePage() {
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [friends, setFriends] = useState(() => getFriends());
+  const [matches, setMatches] = useState(() => getMatchHistory());
   const { toasts, pushToast, removeToast } = useToastQueue();
 
   useEffect(() => {
@@ -41,10 +46,14 @@ export function HomePage() {
       setRoomCode(urlCode);
     }
 
+    setFriends(getFriends());
+    setMatches(getMatchHistory());
+
     void ensureAnonymousSession().catch((sessionError) => {
       const message = sessionError instanceof Error ? sessionError.message : "Не удалось открыть игровую сессию.";
       setError(message);
       pushToast(message, "error");
+      playSfx("error");
     });
   }, [pushToast]);
 
@@ -64,12 +73,14 @@ export function HomePage() {
         body: JSON.stringify({ displayName })
       });
       const payload = await parseJsonResponse<CreateRoomResponse>(response);
+      playSfx("success");
       pushToast(`Комната ${payload.roomCode} создана`, "success");
       router.push(`/room/${payload.roomCode}`);
     } catch (createError) {
       const message = createError instanceof Error ? createError.message : "Не удалось создать комнату.";
       setError(message);
       pushToast(message, "error");
+      playSfx("error");
     } finally {
       setBusy(false);
     }
@@ -91,12 +102,14 @@ export function HomePage() {
         })
       });
       await parseJsonResponse<JoinRoomResponse>(response);
+      playSfx("success");
       pushToast(`Подключение к комнате ${normalizedCode}`, "success");
       router.push(`/room/${normalizedCode}`);
     } catch (joinError) {
       const message = joinError instanceof Error ? joinError.message : "Не удалось войти в комнату.";
       setError(message);
       pushToast(message, "error");
+      playSfx("error");
     } finally {
       setBusy(false);
     }
@@ -168,6 +181,8 @@ export function HomePage() {
           {error ? <p className="error">{error}</p> : null}
         </section>
       </div>
+
+      <SocialSummary friends={friends} matches={matches} />
     </main>
   );
 }
