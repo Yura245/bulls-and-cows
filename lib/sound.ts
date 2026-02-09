@@ -368,15 +368,10 @@ export async function nextMusicTrack(): Promise<boolean> {
 export function applySharedMusicState(shared: SharedMusicStateInput): void {
   if (!isBrowser()) return;
   if (!shared?.updatedAt) return;
-
+  if (shared.updatedAt === lastSharedUpdatedAt) return;
   const normalizedTracks = normalizeSharedTracks(shared.tracks);
-  let tracksChanged = false;
-  if (!areTrackListsEqual(sharedTracks, normalizedTracks)) {
-    sharedTracks = normalizedTracks;
-    tracksChanged = true;
-  }
-
-  if (shared.updatedAt === lastSharedUpdatedAt && !tracksChanged) return;
+  const tracksChanged = !areTrackListsEqual(sharedTracks, normalizedTracks);
+  sharedTracks = normalizedTracks;
   lastSharedUpdatedAt = shared.updatedAt;
 
   const audio = ensureMusicElement();

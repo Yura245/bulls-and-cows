@@ -9,7 +9,7 @@ create table if not exists public.room_music_tracks (
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
-
+  
 create index if not exists idx_room_music_tracks_room_created
 on public.room_music_tracks(room_id, created_at);
 

@@ -64,6 +64,23 @@ for insert with check (
 );
 
 alter table public.room_events drop constraint if exists room_events_type_check;
+
+update public.room_events
+set type = 'settings_updated'
+where type not in (
+  'player_joined',
+  'secret_set',
+  'turn_made',
+  'game_finished',
+  'rematch_requested',
+  'rematch_started',
+  'player_left',
+  'chat_message',
+  'turn_timeout',
+  'settings_updated',
+  'music_updated'
+);
+
 alter table public.room_events add constraint room_events_type_check check (
   type in (
     'player_joined',
@@ -75,6 +92,7 @@ alter table public.room_events add constraint room_events_type_check check (
     'player_left',
     'chat_message',
     'turn_timeout',
-    'settings_updated'
+    'settings_updated',
+    'music_updated'
   )
 );
