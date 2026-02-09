@@ -63,14 +63,25 @@ export function HomePage() {
 
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+
+    const normalizedName = displayName.trim();
+    if (!normalizedName) {
+      const message = "Введите имя игрока.";
+      setError(message);
+      pushToast(message, "error");
+      playSfx("error");
+      return;
+    }
+
     setBusy(true);
     setError("");
 
     try {
-      persistName(displayName);
+      persistName(normalizedName);
       const response = await authorizedFetch("/api/rooms/create", {
         method: "POST",
-        body: JSON.stringify({ displayName })
+        body: JSON.stringify({ displayName: normalizedName })
       });
       const payload = await parseJsonResponse<CreateRoomResponse>(response);
       playSfx("success");
@@ -88,16 +99,36 @@ export function HomePage() {
 
   const handleJoin = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+
+    const normalizedName = displayName.trim();
+    if (!normalizedName) {
+      const message = "Введите имя игрока.";
+      setError(message);
+      pushToast(message, "error");
+      playSfx("error");
+      return;
+    }
+
+    const normalizedCode = normalizeRoomCode(roomCode);
+    if (normalizedCode.length !== 6) {
+      const message = "Введите код комнаты из 6 символов.";
+      setError(message);
+      pushToast(message, "error");
+      playSfx("error");
+      return;
+    }
+
     setBusy(true);
     setError("");
 
     try {
-      persistName(displayName);
-      const normalizedCode = normalizeRoomCode(roomCode);
+      persistName(normalizedName);
+      setRoomCode(normalizedCode);
       const response = await authorizedFetch("/api/rooms/join", {
         method: "POST",
         body: JSON.stringify({
-          displayName,
+          displayName: normalizedName,
           roomCode: normalizedCode
         })
       });
@@ -148,7 +179,7 @@ export function HomePage() {
         <section className="card col">
           <h2 className="section-title">2. Начать игру</h2>
           <form onSubmit={handleCreate}>
-            <button aria-label="Создать новую комнату" disabled={busy || !displayName.trim()} type="submit">
+            <button aria-label="Создать новую комнату" type="submit">
               Создать комнату
             </button>
           </form>
@@ -166,12 +197,7 @@ export function HomePage() {
               maxLength={6}
             />
             <div style={{ marginTop: 10 }}>
-              <button
-                aria-label="Войти в комнату по коду"
-                className="secondary"
-                disabled={busy || !displayName.trim() || roomCode.length !== 6}
-                type="submit"
-              >
+              <button aria-label="Войти в комнату по коду" className="secondary" type="submit">
                 Войти по коду
               </button>
             </div>
