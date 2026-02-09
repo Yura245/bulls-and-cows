@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { MusicPlayer } from "@/components/music-player";
 import { persistSoundPrefs, playSfx, readSoundPrefs, syncMusicEngine } from "@/lib/sound";
 
 type Theme = "light" | "dark";
@@ -72,7 +73,7 @@ export function UiControls() {
             }}
           >
             <option value="light">Светлая</option>
-            <option value="dark">Тёмная</option>
+            <option value="dark">Темная</option>
           </select>
         </label>
         <label>
@@ -139,6 +140,8 @@ export function UiControls() {
           Фоновая музыка
         </label>
       </div>
+
+      <MusicPlayer />
     </section>
   );
 }

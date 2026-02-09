@@ -119,6 +119,30 @@ a {
   gap: 10px;
 }
 
+.music-player {
+  margin-top: 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+
+.music-player-title {
+  display: block;
+}
+
+.music-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.music-upload {
+  margin-top: 10px;
+}
+
+.music-upload input[type="file"] {
+  margin-top: 6px;
+}
+
 .checkbox-row {
   display: flex;
   gap: 8px;
@@ -346,6 +370,11 @@ button:disabled {
   display: inline-flex;
 }
 
+.mobile-menu-trigger {
+  display: none;
+  margin-bottom: 12px;
+}
+
 .mobile-action-bar {
   display: none;
 }
@@ -520,6 +549,39 @@ button:disabled {
 
   .desktop-only {
     display: none;
+  }
+
+  .mobile-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-side {
+    position: fixed !important;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(90vw, 420px);
+    background: var(--bg);
+    padding: 12px;
+    overflow-y: auto;
+    z-index: 95;
+    transform: translateX(105%);
+    transition: transform 0.22s ease;
+    border-left: 1px solid var(--border);
+  }
+
+  .mobile-side.open {
+    transform: translateX(0);
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    border: 0;
+    background: rgba(0, 0, 0, 0.34);
   }
 
   .mobile-action-bar {

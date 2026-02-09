@@ -99,6 +99,7 @@ export function RoomPage({ code }: Props) {
   const [realtimeReady, setRealtimeReady] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [turnSecondsDraft, setTurnSecondsDraft] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const roomCode = code.toUpperCase();
   const { toasts, pushToast, removeToast } = useToastQueue();
@@ -517,6 +518,15 @@ export function RoomPage({ code }: Props) {
         </p>
       </section>
 
+      <button
+        type="button"
+        className="mobile-menu-trigger"
+        aria-expanded={mobileMenuOpen}
+        onClick={() => setMobileMenuOpen((prev) => !prev)}
+      >
+        {mobileMenuOpen ? "Закрыть меню" : "Меню"}
+      </button>
+
       {error ? <p className="error">{error}</p> : null}
 
       {!roomState ? (
@@ -698,7 +708,9 @@ export function RoomPage({ code }: Props) {
             )}
           </div>
 
-          <aside className="room-side">
+          {mobileMenuOpen ? <button type="button" className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню" /> : null}
+
+          <aside className={`room-side mobile-side ${mobileMenuOpen ? "open" : ""}`}>
             <UiControls />
 
             <section className="card fade-in" style={{ marginBottom: 14 }}>

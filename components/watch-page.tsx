@@ -27,6 +27,7 @@ export function WatchPage({ code, spectatorKey }: Props) {
   const [state, setState] = useState<RoomStateDto | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toasts, pushToast, removeToast } = useToastQueue();
 
   const roomCode = code.toUpperCase();
@@ -99,7 +100,14 @@ export function WatchPage({ code, spectatorKey }: Props) {
         </p>
       </section>
 
-      <UiControls />
+      <button
+        type="button"
+        className="mobile-menu-trigger"
+        aria-expanded={mobileMenuOpen}
+        onClick={() => setMobileMenuOpen((prev) => !prev)}
+      >
+        {mobileMenuOpen ? "Закрыть меню" : "Меню"}
+      </button>
       {error ? <p className="error">{error}</p> : null}
 
       {state ? (
@@ -131,7 +139,10 @@ export function WatchPage({ code, spectatorKey }: Props) {
               </div>
             </section>
           </div>
-          <aside className="room-side">
+          {mobileMenuOpen ? <button type="button" className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню" /> : null}
+
+          <aside className={`room-side mobile-side ${mobileMenuOpen ? "open" : ""}`}>
+            <UiControls />
             <section className="card" style={{ marginBottom: 14 }}>
               <h2 className="section-title">Игроки</h2>
               <div className="players-grid">
