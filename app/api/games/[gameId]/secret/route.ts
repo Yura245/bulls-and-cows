@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { addRoomEvent } from "@/lib/events";
 import { HttpError } from "@/lib/errors";
+import { computeTurnDeadline } from "@/lib/game-clock";
 import { fromError, ok } from "@/lib/http";
 import { readJsonBody } from "@/lib/request";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -15,11 +16,13 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
     const secret = ensureFourDigitsNoRepeats(body.secret, "INVALID_SECRET");
     const admin = getSupabaseAdmin();
 
-    const { data: game, error: gameError } = await admin
+    const { data: gameData, error: gameError } = await admin
       .from("games")
       .select("id, room_id, status")
       .eq("id", gameId)
       .maybeSingle();
+
+    const game = gameData as { id: string; room_id: string; status: string } | null;
 
     if (gameError) {
       throw gameError;
@@ -31,12 +34,14 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       throw new HttpError(409, "GAME_ALREADY_STARTED", "Секреты уже заданы.");
     }
 
-    const { data: membership, error: membershipError } = await admin
+    const { data: membershipData, error: membershipError } = await admin
       .from("room_players")
       .select("seat")
       .eq("room_id", game.room_id)
       .eq("user_id", user.id)
       .maybeSingle();
+
+    const membership = membershipData as { seat: number } | null;
 
     if (membershipError) {
       throw membershipError;
@@ -67,51 +72,66 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       seat: membership.seat
     });
 
-    const { data: allSecrets, error: allSecretsError } = await admin
+    const { data: allSecretsData, error: allSecretsError } = await admin
       .from("game_secrets")
       .select("seat, is_set")
       .eq("game_id", game.id);
+
+    const allSecrets = (allSecretsData as { seat: number; is_set: boolean }[] | null) ?? [];
 
     if (allSecretsError) {
       throw allSecretsError;
     }
 
     const bothSet = allSecrets.filter((entry) => entry.is_set).length === 2;
-    if (bothSet) {
-      const turnSeat = Math.random() >= 0.5 ? 1 : 2;
-
-      const { error: gameUpdateError } = await admin
-        .from("games")
-        .update({
-          status: "active",
-          turn_seat: turnSeat,
-          started_at: new Date().toISOString()
-        })
-        .eq("id", game.id)
-        .eq("status", "waiting_secrets");
-
-      if (gameUpdateError) {
-        throw gameUpdateError;
-      }
-
-      const { error: roomUpdateError } = await admin
-        .from("rooms")
-        .update({ status: "active" })
-        .eq("id", game.room_id);
-
-      if (roomUpdateError) {
-        throw roomUpdateError;
-      }
-
+    if (!bothSet) {
       return ok({
         ok: true,
-        gameStatus: "active" as const
+        gameStatus: "waiting_secrets" as const
       });
+    }
+
+    const { data: roomData, error: roomError } = await admin
+      .from("rooms")
+      .select("turn_seconds")
+      .eq("id", game.room_id)
+      .maybeSingle();
+
+    const room = roomData as { turn_seconds: number } | null;
+
+    if (roomError) {
+      throw roomError;
+    }
+    if (!room) {
+      throw new HttpError(404, "ROOM_NOT_FOUND", "Комната не найдена.");
+    }
+
+    const turnSeat = Math.random() >= 0.5 ? 1 : 2;
+    const turnDeadlineAt = computeTurnDeadline(room.turn_seconds);
+
+    const { error: gameUpdateError } = await admin
+      .from("games")
+      .update({
+        status: "active",
+        turn_seat: turnSeat,
+        turn_deadline_at: turnDeadlineAt,
+        started_at: new Date().toISOString()
+      })
+      .eq("id", game.id)
+      .eq("status", "waiting_secrets");
+
+    if (gameUpdateError) {
+      throw gameUpdateError;
+    }
+
+    const { error: roomUpdateError } = await admin.from("rooms").update({ status: "active" }).eq("id", game.room_id);
+    if (roomUpdateError) {
+      throw roomUpdateError;
     }
 
     return ok({
       ok: true,
-      gameStatus: "waiting_secrets" as const
+      gameStatus: "active" as const
     });
   } catch (error) {
     return fromError(error);

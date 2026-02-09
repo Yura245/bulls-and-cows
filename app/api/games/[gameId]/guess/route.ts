@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { addRoomEvent } from "@/lib/events";
 import { HttpError } from "@/lib/errors";
+import { applyTimeoutByRoomCode, computeTurnDeadline } from "@/lib/game-clock";
 import { computeBullsAndCows, flipSeat } from "@/lib/game";
 import { fromError, ok } from "@/lib/http";
 import { readJsonBody } from "@/lib/request";
@@ -18,10 +19,17 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
 
     const { data: gameData, error: gameError } = await admin
       .from("games")
-      .select("id, room_id, status, turn_seat, winner_seat")
+      .select("id, room_id, status, turn_seat, turn_deadline_at")
       .eq("id", gameId)
       .maybeSingle();
-    const game = gameData as { id: string; room_id: string; status: string; turn_seat: number | null } | null;
+
+    let game = gameData as {
+      id: string;
+      room_id: string;
+      status: string;
+      turn_seat: 1 | 2 | null;
+      turn_deadline_at: string | null;
+    } | null;
 
     if (gameError) {
       throw gameError;
@@ -33,12 +41,46 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       throw new HttpError(409, "GAME_NOT_ACTIVE", "Игра не находится в активной фазе.");
     }
 
+    const { data: roomData, error: roomError } = await admin
+      .from("rooms")
+      .select("code, turn_seconds")
+      .eq("id", game.room_id)
+      .maybeSingle();
+
+    const room = roomData as { code: string; turn_seconds: number } | null;
+    if (roomError) {
+      throw roomError;
+    }
+    if (!room) {
+      throw new HttpError(404, "ROOM_NOT_FOUND", "Комната не найдена.");
+    }
+
+    if (room.turn_seconds > 0) {
+      await applyTimeoutByRoomCode(room.code);
+
+      const { data: refreshedGameData, error: refreshedError } = await admin
+        .from("games")
+        .select("id, room_id, status, turn_seat, turn_deadline_at")
+        .eq("id", game.id)
+        .maybeSingle();
+
+      if (refreshedError) {
+        throw refreshedError;
+      }
+      game = refreshedGameData as typeof game;
+
+      if (!game || game.status !== "active") {
+        throw new HttpError(409, "GAME_NOT_ACTIVE", "Игра уже изменилась, обновите страницу.");
+      }
+    }
+
     const { data: membershipData, error: membershipError } = await admin
       .from("room_players")
       .select("seat")
       .eq("room_id", game.room_id)
       .eq("user_id", user.id)
       .maybeSingle();
+
     const membership = membershipData as { seat: number } | null;
 
     if (membershipError) {
@@ -53,6 +95,10 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       throw new HttpError(409, "NOT_YOUR_TURN", "Сейчас ход соперника.");
     }
 
+    if (room.turn_seconds > 0 && game.turn_deadline_at && new Date(game.turn_deadline_at).getTime() < Date.now()) {
+      throw new HttpError(409, "TURN_EXPIRED", "Ваше время вышло, ход перешел сопернику.");
+    }
+
     const { data: opponentSecretDataRaw, error: secretError } = await admin
       .from("game_secrets")
       .select("secret")
@@ -60,6 +106,7 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       .neq("seat", mySeat)
       .eq("is_set", true)
       .maybeSingle();
+
     const opponentSecretData = opponentSecretDataRaw as { secret: string } | null;
 
     if (secretError) {
@@ -78,8 +125,8 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
       .order("turn_no", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const latestTurn = latestTurnData as { turn_no: number } | null;
 
+    const latestTurn = latestTurnData as { turn_no: number } | null;
     if (latestTurnError) {
       throw latestTurnError;
     }
@@ -119,6 +166,7 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
           status: "finished",
           winner_seat: mySeat,
           turn_seat: null,
+          turn_deadline_at: null,
           ended_at: now
         })
         .eq("id", game.id)
@@ -134,11 +182,7 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
         throw new HttpError(409, "GAME_STATE_CONFLICT", "Игра уже изменилась. Обновите страницу.");
       }
 
-      const { error: roomStatusError } = await admin
-        .from("rooms")
-        .update({ status: "finished" })
-        .eq("id", game.room_id);
-
+      const { error: roomStatusError } = await admin.from("rooms").update({ status: "finished" }).eq("id", game.room_id);
       if (roomStatusError) {
         throw roomStatusError;
       }
@@ -157,10 +201,13 @@ export async function POST(request: Request, context: { params: Promise<{ gameId
     }
 
     const nextTurnSeat = flipSeat(mySeat);
+    const nextDeadline = computeTurnDeadline(room.turn_seconds);
+
     const { data: switchedGame, error: switchError } = await admin
       .from("games")
       .update({
-        turn_seat: nextTurnSeat
+        turn_seat: nextTurnSeat,
+        turn_deadline_at: nextDeadline
       })
       .eq("id", game.id)
       .eq("status", "active")

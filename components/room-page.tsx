@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ToastRegion } from "@/components/toast-region";
+import { UiControls } from "@/components/ui-controls";
 import { authorizedFetch, parseJsonResponse } from "@/lib/browser-auth";
 import type { RoomStateDto } from "@/lib/dto";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useToastQueue } from "@/lib/use-toast-queue";
 
 const NAME_STORAGE_KEY = "bac_display_name";
 
@@ -30,6 +33,17 @@ function validateFourDigitsNoRepeats(value: string): string | null {
     return "Цифры не должны повторяться.";
   }
   return null;
+}
+
+function formatTimer(secondsLeft: number): string {
+  const safe = Math.max(0, secondsLeft);
+  const minutes = Math.floor(safe / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = Math.floor(safe % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 function gameStatusText(state: RoomStateDto | null): string {
@@ -98,30 +112,18 @@ export function RoomPage({ code }: Props) {
   const [loading, setLoading] = useState(true);
   const [secretInput, setSecretInput] = useState("");
   const [guessInput, setGuessInput] = useState("");
+  const [chatInput, setChatInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [joined, setJoined] = useState(false);
   const [realtimeReady, setRealtimeReady] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [turnSecondsDraft, setTurnSecondsDraft] = useState<number | null>(null);
 
   const roomCode = code.toUpperCase();
-  const noticeTimerRef = useRef<number | null>(null);
   const hadRealtimeConnectionRef = useRef(false);
+  const hinted10sRef = useRef<string>("");
 
-  const pushNotice = useCallback((message: string) => {
-    setNotice(message);
-    if (noticeTimerRef.current) {
-      window.clearTimeout(noticeTimerRef.current);
-    }
-    noticeTimerRef.current = window.setTimeout(() => setNotice(""), 3000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (noticeTimerRef.current) {
-        window.clearTimeout(noticeTimerRef.current);
-      }
-    };
-  }, []);
+  const { toasts, pushToast, removeToast } = useToastQueue();
 
   const fetchState = useCallback(async () => {
     const response = await authorizedFetch(`/api/rooms/${roomCode}/state`);
@@ -129,6 +131,13 @@ export function RoomPage({ code }: Props) {
     setRoomState(payload);
     return payload;
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!roomState) return;
+    if (turnSecondsDraft === null) {
+      setTurnSecondsDraft(roomState.settings.turnSeconds);
+    }
+  }, [roomState, turnSecondsDraft]);
 
   const ensureJoined = useCallback(async () => {
     const displayName = window.localStorage.getItem(NAME_STORAGE_KEY) || "Игрок";
@@ -150,11 +159,13 @@ export function RoomPage({ code }: Props) {
       await ensureJoined();
       await fetchState();
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Не удалось подключиться к комнате.");
+      const message = joinError instanceof Error ? joinError.message : "Не удалось подключиться к комнате.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setLoading(false);
     }
-  }, [ensureJoined, fetchState]);
+  }, [ensureJoined, fetchState, pushToast]);
 
   useEffect(() => {
     void loadRoom();
@@ -205,7 +216,7 @@ export function RoomPage({ code }: Props) {
         }
 
         if (hadRealtimeConnectionRef.current) {
-          pushNotice("Связь realtime потеряна. Продолжаем обновлять комнату каждые 3 секунды.");
+          pushToast("Связь realtime потеряна. Работаем через polling.", "info");
         }
       });
 
@@ -213,7 +224,35 @@ export function RoomPage({ code }: Props) {
       setRealtimeReady(false);
       void supabase.removeChannel(channel);
     };
-  }, [roomState?.roomId, fetchState, pushNotice]);
+  }, [roomState?.roomId, fetchState, pushToast]);
+
+  useEffect(() => {
+    const game = roomState?.game;
+    const turnSeconds = roomState?.settings.turnSeconds ?? 0;
+    const deadline = game?.turnDeadlineAt;
+    if (!deadline || turnSeconds === 0) {
+      setSecondsLeft(null);
+      hinted10sRef.current = "";
+      return;
+    }
+
+    const update = () => {
+      const left = Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000);
+      setSecondsLeft(left);
+
+      if (game.turnSeat === game.mySeat && left <= 10 && left > 0) {
+        const key = `${game.id}-${deadline}`;
+        if (hinted10sRef.current !== key) {
+          hinted10sRef.current = key;
+          pushToast("Осталось меньше 10 секунд на ход.", "info");
+        }
+      }
+    };
+
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [roomState, pushToast]);
 
   const submitSecret = async (event: FormEvent) => {
     event.preventDefault();
@@ -229,9 +268,11 @@ export function RoomPage({ code }: Props) {
       await parseJsonResponse(response);
       setSecretInput("");
       await fetchState();
-      pushNotice("Секрет сохранен.");
+      pushToast("Секрет сохранен.", "success");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Ошибка отправки секрета.");
+      const message = submitError instanceof Error ? submitError.message : "Ошибка отправки секрета.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setBusy(false);
     }
@@ -251,8 +292,11 @@ export function RoomPage({ code }: Props) {
       await parseJsonResponse(response);
       setGuessInput("");
       await fetchState();
+      pushToast("Ход отправлен.", "success");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Ошибка отправки хода.");
+      const message = submitError instanceof Error ? submitError.message : "Ошибка отправки хода.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setBusy(false);
     }
@@ -270,20 +314,63 @@ export function RoomPage({ code }: Props) {
       });
       await parseJsonResponse(response);
       await fetchState();
-      pushNotice("Голос за реванш отправлен.");
+      pushToast("Голос за реванш отправлен.", "success");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Ошибка голосования за реванш.");
+      const message = submitError instanceof Error ? submitError.message : "Ошибка голосования за реванш.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitChat = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!chatInput.trim()) {
+      return;
+    }
+    try {
+      const response = await authorizedFetch(`/api/rooms/${roomCode}/chat`, {
+        method: "POST",
+        body: JSON.stringify({ message: chatInput })
+      });
+      await parseJsonResponse(response);
+      setChatInput("");
+      await fetchState();
+      pushToast("Сообщение отправлено.", "success");
+    } catch (chatError) {
+      const message = chatError instanceof Error ? chatError.message : "Не удалось отправить сообщение.";
+      setError(message);
+      pushToast(message, "error");
+    }
+  };
+
+  const saveTurnMode = async () => {
+    if (!roomState) return;
+    try {
+      const response = await authorizedFetch(`/api/rooms/${roomCode}/settings`, {
+        method: "POST",
+        body: JSON.stringify({
+          turnSeconds: turnSecondsDraft ?? roomState.settings.turnSeconds
+        })
+      });
+      await parseJsonResponse(response);
+      await fetchState();
+      setTurnSecondsDraft(turnSecondsDraft ?? roomState.settings.turnSeconds);
+      pushToast("Режим таймера обновлен.", "success");
+    } catch (settingsError) {
+      const message = settingsError instanceof Error ? settingsError.message : "Не удалось обновить режим.";
+      setError(message);
+      pushToast(message, "error");
     }
   };
 
   const handleCopyCode = async () => {
     try {
       await copyText(roomCode);
-      pushNotice("Код комнаты скопирован.");
+      pushToast("Код комнаты скопирован.", "success");
     } catch {
-      setError("Не удалось скопировать код комнаты.");
+      pushToast("Не удалось скопировать код комнаты.", "error");
     }
   };
 
@@ -291,9 +378,19 @@ export function RoomPage({ code }: Props) {
     try {
       const inviteUrl = `${window.location.origin}/room/${roomCode}`;
       await copyText(inviteUrl);
-      pushNotice("Ссылка-приглашение скопирована.");
+      pushToast("Ссылка приглашения скопирована.", "success");
     } catch {
-      setError("Не удалось скопировать ссылку.");
+      pushToast("Не удалось скопировать ссылку.", "error");
+    }
+  };
+
+  const handleCopySpectatorLink = async () => {
+    if (!roomState?.spectatorPath) return;
+    try {
+      await copyText(`${window.location.origin}${roomState.spectatorPath}`);
+      pushToast("Ссылка наблюдателя скопирована.", "success");
+    } catch {
+      pushToast("Не удалось скопировать ссылку наблюдателя.", "error");
     }
   };
 
@@ -306,12 +403,13 @@ export function RoomPage({ code }: Props) {
           text: `Присоединяйся к моей комнате: ${roomCode}`,
           url: inviteUrl
         });
+        pushToast("Ссылка отправлена.", "success");
         return;
       }
       await copyText(inviteUrl);
-      pushNotice("Ссылка-приглашение скопирована.");
+      pushToast("Ссылка приглашения скопирована.", "success");
     } catch {
-      setError("Не удалось поделиться ссылкой.");
+      pushToast("Не удалось поделиться ссылкой.", "error");
     }
   };
 
@@ -330,12 +428,12 @@ export function RoomPage({ code }: Props) {
   const canSubmitGuess = Boolean(canGuess && guessInput.length === 4 && !guessValidationError && !busy);
 
   const myTurns = useMemo(() => {
-    if (!roomState?.game) return [] as TurnItem[];
+    if (!roomState?.game || !roomState.game.mySeat) return [] as TurnItem[];
     return roomState.game.history.filter((turn) => turn.guesserSeat === roomState.game?.mySeat);
   }, [roomState]);
 
   const opponentTurns = useMemo(() => {
-    if (!roomState?.game) return [] as TurnItem[];
+    if (!roomState?.game || !roomState.game.mySeat) return [] as TurnItem[];
     return roomState.game.history.filter((turn) => turn.guesserSeat !== roomState.game?.mySeat);
   }, [roomState]);
 
@@ -352,21 +450,33 @@ export function RoomPage({ code }: Props) {
 
   return (
     <main className="page-wrap">
+      <a href="#room-main-content" className="skip-link">
+        Перейти к основному контенту
+      </a>
+
+      <ToastRegion toasts={toasts} onDismiss={removeToast} />
+
       <div style={{ marginBottom: 10 }}>
         <Link href="/">На главную</Link>
       </div>
 
-      <section className="hero">
+      <section className="hero" id="room-main-content">
         <h1>Комната {roomCode}</h1>
         <p>
           Статус: <span className="badge">{gameStatusText(roomState)}</span>{" "}
           <span className={`badge ${realtimeReady ? "connection-ok" : "connection-fallback"}`}>
             {realtimeReady ? "Realtime: онлайн" : "Realtime: polling"}
           </span>
+          {roomState?.settings.turnSeconds ? (
+            <span className="badge timer-mode-badge">Блиц {roomState.settings.turnSeconds}с</span>
+          ) : (
+            <span className="badge timer-mode-badge">Классика</span>
+          )}
         </p>
       </section>
 
-      {notice ? <p className="notice">{notice}</p> : null}
+      <UiControls />
+
       {error ? <p className="error">{error}</p> : null}
 
       {!roomState ? (
@@ -378,7 +488,7 @@ export function RoomPage({ code }: Props) {
         </section>
       ) : (
         <>
-          <section className="card" style={{ marginBottom: 14 }}>
+          <section className="card fade-in" style={{ marginBottom: 14 }}>
             <h2 className="section-title">Поделиться комнатой</h2>
             <p className="hint">Код: {roomCode}</p>
             <div className="share-actions">
@@ -391,15 +501,57 @@ export function RoomPage({ code }: Props) {
               <button type="button" className="ghost" onClick={handleNativeShare}>
                 Поделиться
               </button>
+              {roomState.spectatorPath ? (
+                <button type="button" className="ghost" onClick={handleCopySpectatorLink}>
+                  Ссылка наблюдателя
+                </button>
+              ) : null}
             </div>
           </section>
 
-          <section className={`card turn-banner ${canGuess ? "my-turn" : "wait-turn"}`} style={{ marginBottom: 14 }}>
+          {roomState.settings.isHost ? (
+            <section className="card fade-in" style={{ marginBottom: 14 }}>
+              <h2 className="section-title">Режим хода</h2>
+              <div className="inline-actions">
+                <label>
+                  Таймер
+                  <select
+                    value={turnSecondsDraft ?? roomState.settings.turnSeconds}
+                    onChange={(event) => setTurnSecondsDraft(Number(event.target.value))}
+                  >
+                    <option value={0}>Без таймера (классика)</option>
+                    <option value={30}>30 секунд</option>
+                    <option value={45}>45 секунд</option>
+                    <option value={60}>60 секунд</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={saveTurnMode}
+                  disabled={(turnSecondsDraft ?? roomState.settings.turnSeconds) === roomState.settings.turnSeconds}
+                >
+                  Сохранить режим
+                </button>
+              </div>
+              <p className="hint">Изменение доступно только хосту и только вне активного матча.</p>
+            </section>
+          ) : null}
+
+          <section className={`card turn-banner ${canGuess ? "my-turn" : "wait-turn"} fade-in`} style={{ marginBottom: 14 }}>
             <h2 className="section-title">Что сейчас делать</h2>
             <p>{nextActionText(roomState)}</p>
+            {roomState.game?.status === "active" && roomState.settings.turnSeconds > 0 ? (
+              <p className="timer-line">
+                До конца хода:{" "}
+                <strong className={secondsLeft !== null && secondsLeft <= 10 ? "timer-danger" : ""}>
+                  {secondsLeft !== null ? formatTimer(secondsLeft) : "--:--"}
+                </strong>
+              </p>
+            ) : null}
           </section>
 
-          <section className="card" style={{ marginBottom: 14 }}>
+          <section className="card fade-in" style={{ marginBottom: 14 }}>
             <h2 className="section-title">Игроки</h2>
             <div className="players-grid">
               {roomState.players.map((player) => (
@@ -413,14 +565,36 @@ export function RoomPage({ code }: Props) {
             </div>
           </section>
 
+          <section className="card fade-in" style={{ marginBottom: 14 }}>
+            <h2 className="section-title">Мини-статистика комнаты</h2>
+            <div className="status-grid">
+              <div className="mini-card">
+                <strong>Раундов завершено</strong>
+                <span>{roomState.stats.finishedRounds}</span>
+              </div>
+              <div className="mini-card">
+                <strong>Среднее число ходов</strong>
+                <span>{roomState.stats.avgTurns}</span>
+              </div>
+              <div className="mini-card">
+                <strong>Победы Игрока 1</strong>
+                <span>{roomState.stats.seat1Wins}</span>
+              </div>
+              <div className="mini-card">
+                <strong>Победы Игрока 2</strong>
+                <span>{roomState.stats.seat2Wins}</span>
+              </div>
+            </div>
+          </section>
+
           {roomState.game ? (
             <>
-              <section className="card" style={{ marginBottom: 14 }}>
+              <section className="card fade-in" style={{ marginBottom: 14 }}>
                 <h2 className="section-title">Раунд {roomState.game.roundNo}</h2>
                 <div className="status-grid">
                   <div className="mini-card">
                     <strong>Ваше место</strong>
-                    <span>Игрок {roomState.game.mySeat}</span>
+                    <span>{roomState.game.mySeat ? `Игрок ${roomState.game.mySeat}` : "Наблюдатель"}</span>
                   </div>
                   <div className="mini-card">
                     <strong>Секрет</strong>
@@ -430,12 +604,13 @@ export function RoomPage({ code }: Props) {
               </section>
 
               {canSetSecret ? (
-                <section className="card" style={{ marginBottom: 14 }}>
+                <section className="card fade-in" style={{ marginBottom: 14 }}>
                   <h2 className="section-title">Введите секретное число</h2>
                   <form id="secret-form" onSubmit={submitSecret}>
                     <label htmlFor="secretInput">4 разные цифры</label>
                     <input
                       id="secretInput"
+                      aria-label="Введите секретное число"
                       value={secretInput}
                       onChange={(event) => setSecretInput(normalizeDigits(event.target.value))}
                       placeholder="Например, 4831"
@@ -443,7 +618,7 @@ export function RoomPage({ code }: Props) {
                       inputMode="numeric"
                       pattern="[0-9]*"
                     />
-                    {secretValidationError ? <p className="error" style={{ marginTop: 8 }}>{secretValidationError}</p> : null}
+                    {secretValidationError ? <p className="error">{secretValidationError}</p> : null}
                     <div className="inline-actions">
                       <button className="secondary desktop-only" disabled={!canSubmitSecret} type="submit">
                         Сохранить секрет
@@ -457,12 +632,13 @@ export function RoomPage({ code }: Props) {
               ) : null}
 
               {canGuess ? (
-                <section className="card" style={{ marginBottom: 14 }}>
+                <section className="card fade-in" style={{ marginBottom: 14 }}>
                   <h2 className="section-title">Ваш ход</h2>
                   <form id="guess-form" onSubmit={submitGuess}>
                     <label htmlFor="guessInput">Попытка (4 разные цифры)</label>
                     <input
                       id="guessInput"
+                      aria-label="Введите попытку"
                       value={guessInput}
                       onChange={(event) => setGuessInput(normalizeDigits(event.target.value))}
                       placeholder="Например, 9052"
@@ -470,7 +646,7 @@ export function RoomPage({ code }: Props) {
                       inputMode="numeric"
                       pattern="[0-9]*"
                     />
-                    {guessValidationError ? <p className="error" style={{ marginTop: 8 }}>{guessValidationError}</p> : null}
+                    {guessValidationError ? <p className="error">{guessValidationError}</p> : null}
                     <div className="inline-actions">
                       <button className="secondary desktop-only" disabled={!canSubmitGuess} type="submit">
                         Отправить ход
@@ -483,7 +659,7 @@ export function RoomPage({ code }: Props) {
                 </section>
               ) : null}
 
-              <section className="card" style={{ marginBottom: 14 }}>
+              <section className="card fade-in" style={{ marginBottom: 14 }}>
                 <h2 className="section-title">Ходы игроков (раздельные окна)</h2>
                 <div className="split-turns">
                   <div className="mini-card">
@@ -491,7 +667,7 @@ export function RoomPage({ code }: Props) {
                     {myTurns.length ? (
                       <ul className="history">
                         {myTurns.map((turn) => (
-                          <li key={`my-${turn.turnNo}`} className={turn.turnNo === latestTurnNo ? "last-turn" : ""}>
+                          <li key={`my-${turn.turnNo}`} className={turn.turnNo === latestTurnNo ? "last-turn animate-pop" : ""}>
                             #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
                           </li>
                         ))}
@@ -506,7 +682,7 @@ export function RoomPage({ code }: Props) {
                     {opponentTurns.length ? (
                       <ul className="history">
                         {opponentTurns.map((turn) => (
-                          <li key={`op-${turn.turnNo}`} className={turn.turnNo === latestTurnNo ? "last-turn" : ""}>
+                          <li key={`op-${turn.turnNo}`} className={turn.turnNo === latestTurnNo ? "last-turn animate-pop" : ""}>
                             #{turn.turnNo}: {turn.guess} {"->"} {turn.bulls}Б / {turn.cows}К
                           </li>
                         ))}
@@ -518,8 +694,32 @@ export function RoomPage({ code }: Props) {
                 </div>
               </section>
 
+              <section className="card fade-in" style={{ marginBottom: roomState.game.status === "finished" ? 14 : 90 }}>
+                <h2 className="section-title">Чат комнаты</h2>
+                <ul className="chat-list" aria-live="polite">
+                  {roomState.chat.map((message) => (
+                    <li key={message.id}>
+                      <strong>{message.author}:</strong> {message.text}
+                    </li>
+                  ))}
+                  {!roomState.chat.length ? <li className="hint">Пока сообщений нет.</li> : null}
+                </ul>
+                <form className="chat-form" onSubmit={submitChat}>
+                  <input
+                    aria-label="Введите сообщение в чат"
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value.slice(0, 300))}
+                    placeholder="Напишите сообщение..."
+                    maxLength={300}
+                  />
+                  <button type="submit" className="secondary" disabled={!chatInput.trim()}>
+                    Отправить
+                  </button>
+                </form>
+              </section>
+
               {roomState.game.status === "finished" ? (
-                <section className="card" style={{ marginBottom: 90 }}>
+                <section className="card fade-in" style={{ marginBottom: 90 }}>
                   <h2 className="section-title">Итог матча и реванш</h2>
                   <p className="hint">
                     Победитель: <strong>{winnerName}</strong>. Всего ходов: <strong>{roomState.game.history.length}</strong>.
@@ -532,12 +732,10 @@ export function RoomPage({ code }: Props) {
                     Хочу реванш
                   </button>
                 </section>
-              ) : (
-                <div style={{ marginBottom: 90 }} />
-              )}
+              ) : null}
             </>
           ) : (
-            <section className="card" style={{ marginBottom: 90 }}>
+            <section className="card fade-in" style={{ marginBottom: 90 }}>
               <p>Ждем второго игрока. Отправьте другу код: {roomCode}</p>
             </section>
           )}

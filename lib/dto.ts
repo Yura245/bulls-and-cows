@@ -6,6 +6,13 @@ export type RoomPlayerDto = {
   online: boolean;
 };
 
+export type ChatMessageDto = {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+};
+
 export type GuessDto = {
   turnNo: number;
   guesserSeat: 1 | 2;
@@ -20,8 +27,9 @@ export type GameDto = {
   roundNo: number;
   status: GameStatus;
   turnSeat: 1 | 2 | null;
+  turnDeadlineAt: string | null;
   winnerSeat: 1 | 2 | null;
-  mySeat: 1 | 2;
+  mySeat: 1 | 2 | null;
   mySecretSet: boolean;
   opponentSecretSet: boolean;
   history: GuessDto[];
@@ -35,6 +43,19 @@ export type RoomStateDto = {
   roomId: string;
   roomCode: string;
   status: RoomStatus;
+  viewerRole: "player" | "spectator";
+  settings: {
+    turnSeconds: number;
+    isHost: boolean;
+  };
+  spectatorPath: string | null;
   players: RoomPlayerDto[];
+  chat: ChatMessageDto[];
+  stats: {
+    seat1Wins: number;
+    seat2Wins: number;
+    finishedRounds: number;
+    avgTurns: number;
+  };
   game: GameDto | null;
 };

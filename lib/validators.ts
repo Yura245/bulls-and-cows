@@ -1,4 +1,4 @@
-import { ROOM_CODE_LENGTH } from "@/lib/constants";
+import { ROOM_CODE_LENGTH, TURN_SECONDS_OPTIONS } from "@/lib/constants";
 import { HttpError } from "@/lib/errors";
 
 const NUMBER_4_NO_REPEAT_REGEX = /^\d{4}$/;
@@ -33,4 +33,23 @@ export function ensureFourDigitsNoRepeats(value: unknown, errorCode: string): st
     throw new HttpError(400, errorCode, "Нужно ввести 4 разные цифры.");
   }
   return normalized;
+}
+
+export function ensureTurnSeconds(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric) || !TURN_SECONDS_OPTIONS.includes(numeric as (typeof TURN_SECONDS_OPTIONS)[number])) {
+    throw new HttpError(400, "INVALID_TURN_SECONDS", "Разрешены режимы: без таймера, 30с, 45с, 60с.");
+  }
+  return numeric;
+}
+
+export function ensureChatMessage(value: unknown): string {
+  const message = typeof value === "string" ? value.trim() : "";
+  if (!message) {
+    throw new HttpError(400, "INVALID_CHAT_MESSAGE", "Сообщение не может быть пустым.");
+  }
+  if (message.length > 300) {
+    throw new HttpError(400, "INVALID_CHAT_MESSAGE", "Сообщение слишком длинное (максимум 300 символов).");
+  }
+  return message;
 }

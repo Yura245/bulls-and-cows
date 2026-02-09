@@ -1,4 +1,5 @@
 import { requireAuth } from "@/lib/auth";
+import { applyTimeoutByRoomCode } from "@/lib/game-clock";
 import { fromError, ok } from "@/lib/http";
 import { buildRoomState } from "@/lib/state";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -10,6 +11,7 @@ export async function GET(_request: Request, context: { params: Promise<{ code: 
     const params = await context.params;
     const roomCode = normalizeRoomCode(params.code);
 
+    await applyTimeoutByRoomCode(roomCode);
     const state = await buildRoomState(roomCode, user.id);
 
     const admin = getSupabaseAdmin();

@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
+import { ToastRegion } from "@/components/toast-region";
+import { UiControls } from "@/components/ui-controls";
 import { authorizedFetch, ensureAnonymousSession, parseJsonResponse } from "@/lib/browser-auth";
+import { useToastQueue } from "@/lib/use-toast-queue";
 
 const NAME_STORAGE_KEY = "bac_display_name";
 
@@ -28,6 +31,7 @@ export function HomePage() {
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { toasts, pushToast, removeToast } = useToastQueue();
 
   useEffect(() => {
     const cachedName = window.localStorage.getItem(NAME_STORAGE_KEY) ?? "";
@@ -38,9 +42,11 @@ export function HomePage() {
     }
 
     void ensureAnonymousSession().catch((sessionError) => {
-      setError(sessionError instanceof Error ? sessionError.message : "Не удалось открыть игровую сессию.");
+      const message = sessionError instanceof Error ? sessionError.message : "Не удалось открыть игровую сессию.";
+      setError(message);
+      pushToast(message, "error");
     });
-  }, []);
+  }, [pushToast]);
 
   const persistName = (name: string) => {
     window.localStorage.setItem(NAME_STORAGE_KEY, name);
@@ -58,9 +64,12 @@ export function HomePage() {
         body: JSON.stringify({ displayName })
       });
       const payload = await parseJsonResponse<CreateRoomResponse>(response);
+      pushToast(`Комната ${payload.roomCode} создана`, "success");
       router.push(`/room/${payload.roomCode}`);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Не удалось создать комнату.");
+      const message = createError instanceof Error ? createError.message : "Не удалось создать комнату.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setBusy(false);
     }
@@ -82,9 +91,12 @@ export function HomePage() {
         })
       });
       await parseJsonResponse<JoinRoomResponse>(response);
+      pushToast(`Подключение к комнате ${normalizedCode}`, "success");
       router.push(`/room/${normalizedCode}`);
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Не удалось войти в комнату.");
+      const message = joinError instanceof Error ? joinError.message : "Не удалось войти в комнату.";
+      setError(message);
+      pushToast(message, "error");
     } finally {
       setBusy(false);
     }
@@ -92,10 +104,18 @@ export function HomePage() {
 
   return (
     <main className="page-wrap">
-      <section className="hero">
+      <a href="#main-content" className="skip-link">
+        Перейти к основному контенту
+      </a>
+
+      <ToastRegion toasts={toasts} onDismiss={removeToast} />
+
+      <section className="hero" id="main-content">
         <h1>Быки и коровы онлайн</h1>
         <p>Создай комнату, отправь код другу и играйте в реальном времени из разных городов.</p>
       </section>
+
+      <UiControls />
 
       <div className="row">
         <section className="card col">
@@ -103,6 +123,7 @@ export function HomePage() {
           <label htmlFor="displayName">Имя</label>
           <input
             id="displayName"
+            aria-label="Введите имя игрока"
             maxLength={24}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
@@ -114,7 +135,7 @@ export function HomePage() {
         <section className="card col">
           <h2 className="section-title">2. Начать игру</h2>
           <form onSubmit={handleCreate}>
-            <button disabled={busy || !displayName.trim()} type="submit">
+            <button aria-label="Создать новую комнату" disabled={busy || !displayName.trim()} type="submit">
               Создать комнату
             </button>
           </form>
@@ -125,19 +146,25 @@ export function HomePage() {
             <label htmlFor="roomCode">Код комнаты</label>
             <input
               id="roomCode"
+              aria-label="Введите код комнаты"
               value={roomCode}
               onChange={(event) => setRoomCode(normalizeRoomCode(event.target.value))}
               placeholder="Например, AB12CD"
               maxLength={6}
             />
             <div style={{ marginTop: 10 }}>
-              <button className="secondary" disabled={busy || !displayName.trim() || roomCode.length !== 6} type="submit">
+              <button
+                aria-label="Войти в комнату по коду"
+                className="secondary"
+                disabled={busy || !displayName.trim() || roomCode.length !== 6}
+                type="submit"
+              >
                 Войти по коду
               </button>
             </div>
           </form>
 
-          <p className="hint">Совет: проще отправлять другу ссылку комнаты изнутри игры.</p>
+          <p className="hint">Совет: после создания лучше делиться ссылкой комнаты, а не вручную кодом.</p>
           {error ? <p className="error">{error}</p> : null}
         </section>
       </div>

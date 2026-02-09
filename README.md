@@ -1,36 +1,39 @@
-# Быки и коровы онлайн (MVP)
+# Быки и коровы онлайн
 
-Онлайн-игра 1v1 на `Next.js + Supabase`, где два игрока подключаются по коду комнаты и играют в реальном времени.
+Онлайн-игра 1v1 на `Next.js + Supabase`, где два игрока подключаются к одной комнате по коду.
 
 ## Что реализовано
 
-- Создание комнаты и вход по 6-символьному коду.
-- Анонимная авторизация через Supabase (`signInAnonymously`).
-- Режим 1v1, 4 цифры без повторов.
-- Серверные API для:
-  - создания/входа в комнату;
-  - получения state комнаты;
-  - heartbeat онлайн-статуса;
-  - задания секрета;
-  - хода;
-  - реванша.
-- Realtime через `room_events` + fallback polling раз в 3 секунды.
-- SQL-миграция со схемой, индексами, RLS-политиками и подключением таблицы событий к Realtime.
-- Unit-тесты для игровой логики и валидаторов.
+- Комнаты 1v1 с кодом подключения.
+- Анонимная авторизация через Supabase.
+- Realtime обновления через `room_events` + fallback polling.
+- Реванш в той же комнате.
+- UX-улучшения:
+  - toast-уведомления;
+  - режимы хода с таймером (0/30/45/60);
+  - чат комнаты;
+  - режим наблюдателя (read-only spectator link);
+  - разделенные панели ходов;
+  - мини-статистика по раундам;
+  - переключатели темы/скина/контраста;
+  - мягкие анимации появления блоков и новых ходов.
+- E2E-скелет на Playwright.
 
 ## Стек
 
 - Next.js (App Router, TypeScript)
 - Supabase (Postgres, Auth, Realtime)
-- Vitest
+- Vitest + Playwright
 
-## Подготовка окружения
+## Переменные окружения
 
-1. Скопируйте `.env.example` в `.env.local`.
-2. Заполните переменные:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+Создайте `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
 
 ## Установка и запуск
 
@@ -39,23 +42,28 @@ npm install
 npm run dev
 ```
 
-Приложение будет доступно на `http://localhost:3000`.
+Локально: `http://localhost:3000`.
 
 ## Миграции Supabase
 
-SQL-файл:
+Нужно применить обе миграции в SQL Editor:
 
-- `supabase/migrations/202602091430_init.sql`
+1. `supabase/migrations/202602091430_init.sql`
+2. `supabase/migrations/202602091930_ux_social_upgrade.sql`
 
-Применить можно через Supabase SQL Editor или Supabase CLI.
-
-## Проверка
+## Скрипты
 
 ```bash
 npm run test
+npm run build
+npm run test:e2e
 ```
 
-Сценарии интеграционной и e2e-проверки описаны в `docs/qa-checklist.md`.
+Для e2e-мультиплеера:
+
+```bash
+E2E_RUN_ONLINE=1 npm run test:e2e
+```
 
 ## Основные API
 
@@ -63,13 +71,14 @@ npm run test
 - `POST /api/rooms/join`
 - `GET /api/rooms/:code/state`
 - `POST /api/rooms/:code/heartbeat`
+- `POST /api/rooms/:code/chat`
+- `POST /api/rooms/:code/settings`
 - `POST /api/games/:gameId/secret`
 - `POST /api/games/:gameId/guess`
 - `POST /api/games/:gameId/rematch-vote`
+- `GET /api/watch/:code/state?key=...`
 - `GET /api/health`
 
-## Заметки по безопасности
+## QA чеклист
 
-- Расчет быков/коров выполняется только на сервере.
-- Таблица `game_secrets` недоступна клиенту через RLS.
-- Критичные игровые действия идут через API.
+Сценарии интеграции/e2e и security: `docs/qa-checklist.md`.
