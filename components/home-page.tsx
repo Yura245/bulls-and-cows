@@ -18,6 +18,10 @@ type JoinRoomResponse = {
   seat: 1 | 2;
 };
 
+function normalizeRoomCode(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
 export function HomePage() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState("");
@@ -28,8 +32,13 @@ export function HomePage() {
   useEffect(() => {
     const cachedName = window.localStorage.getItem(NAME_STORAGE_KEY) ?? "";
     setDisplayName(cachedName);
+    const urlCode = normalizeRoomCode(new URLSearchParams(window.location.search).get("code") ?? "");
+    if (urlCode) {
+      setRoomCode(urlCode);
+    }
+
     void ensureAnonymousSession().catch((sessionError) => {
-      setError(sessionError instanceof Error ? sessionError.message : "Не удалось открыть сессию.");
+      setError(sessionError instanceof Error ? sessionError.message : "Не удалось открыть игровую сессию.");
     });
   }, []);
 
@@ -64,15 +73,16 @@ export function HomePage() {
 
     try {
       persistName(displayName);
+      const normalizedCode = normalizeRoomCode(roomCode);
       const response = await authorizedFetch("/api/rooms/join", {
         method: "POST",
         body: JSON.stringify({
           displayName,
-          roomCode
+          roomCode: normalizedCode
         })
       });
       await parseJsonResponse<JoinRoomResponse>(response);
-      router.push(`/room/${roomCode.trim().toUpperCase()}`);
+      router.push(`/room/${normalizedCode}`);
     } catch (joinError) {
       setError(joinError instanceof Error ? joinError.message : "Не удалось войти в комнату.");
     } finally {
@@ -98,7 +108,7 @@ export function HomePage() {
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="Например, Юра"
           />
-          <p className="hint">Имя видно вашему сопернику в комнате.</p>
+          <p className="hint">Имя видит соперник. После входа оно запоминается на устройстве.</p>
         </section>
 
         <section className="card col">
@@ -116,17 +126,18 @@ export function HomePage() {
             <input
               id="roomCode"
               value={roomCode}
-              onChange={(event) => setRoomCode(event.target.value.toUpperCase())}
+              onChange={(event) => setRoomCode(normalizeRoomCode(event.target.value))}
               placeholder="Например, AB12CD"
               maxLength={6}
             />
             <div style={{ marginTop: 10 }}>
-              <button className="secondary" disabled={busy || !displayName.trim() || !roomCode.trim()} type="submit">
+              <button className="secondary" disabled={busy || !displayName.trim() || roomCode.length !== 6} type="submit">
                 Войти по коду
               </button>
             </div>
           </form>
 
+          <p className="hint">Совет: проще отправлять другу ссылку комнаты изнутри игры.</p>
           {error ? <p className="error">{error}</p> : null}
         </section>
       </div>

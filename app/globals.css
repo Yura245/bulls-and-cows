@@ -8,6 +8,7 @@
   --accent-soft: #f5ddcf;
   --border: #e7dccd;
   --good: #1b7f3a;
+  --warn: #a14520;
 }
 
 * {
@@ -29,7 +30,7 @@ a {
 }
 
 .page-wrap {
-  width: min(960px, 92vw);
+  width: min(980px, 92vw);
   margin: 0 auto;
   padding: 24px 0 48px;
 }
@@ -118,6 +119,16 @@ button:disabled {
   font-size: 14px;
 }
 
+.notice {
+  margin-top: 12px;
+  color: #21491f;
+  font-size: 14px;
+  padding: 10px 12px;
+  background: #e7f5e7;
+  border: 1px solid #b8e0b8;
+  border-radius: 10px;
+}
+
 .hint {
   margin-top: 8px;
   font-size: 13px;
@@ -126,6 +137,12 @@ button:disabled {
 
 .players-grid,
 .status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-turns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -158,12 +175,14 @@ button:disabled {
 }
 
 .history {
-  margin: 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 340px;
+  overflow: auto;
 }
 
 .history li {
@@ -172,6 +191,11 @@ button:disabled {
   padding: 10px;
   background: #fff9ee;
   font-size: 14px;
+}
+
+.history li.last-turn {
+  border-color: #d98254;
+  background: #fff1e7;
 }
 
 .badge {
@@ -183,9 +207,86 @@ button:disabled {
   color: #6d2f17;
 }
 
+.badge.connection-ok {
+  background: #e2f3e5;
+  color: #1c5d2d;
+}
+
+.badge.connection-fallback {
+  background: #fcebdc;
+  color: #7a3a1d;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.turn-banner {
+  border-width: 2px;
+}
+
+.turn-banner p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.turn-banner.my-turn {
+  border-color: #63b574;
+  background: #eff9f1;
+}
+
+.turn-banner.wait-turn {
+  border-color: #d0b28f;
+  background: #fff8ef;
+}
+
+.inline-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.desktop-only {
+  display: inline-flex;
+}
+
+.mobile-action-bar {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .players-grid,
-  .status-grid {
+  .status-grid,
+  .split-turns {
     grid-template-columns: 1fr;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  .mobile-action-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    border-top: 1px solid var(--border);
+    background: rgba(255, 253, 248, 0.97);
+    backdrop-filter: blur(4px);
+  }
+
+  .mobile-action-bar button {
+    flex: 1;
+    min-width: 120px;
   }
 }
