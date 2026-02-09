@@ -16,6 +16,9 @@ function formatDate(iso: string): string {
 }
 
 export function SocialSummary({ friends, matches }: Props) {
+  const safeFriends = Array.isArray(friends) ? friends : [];
+  const safeMatches = Array.isArray(matches) ? matches : [];
+
   return (
     <section className="card" style={{ marginTop: 14 }}>
       <h2 className="section-title">Друзья и история</h2>
@@ -23,24 +26,24 @@ export function SocialSummary({ friends, matches }: Props) {
         <div className="mini-card">
           <strong>Последние друзья</strong>
           <ul className="history">
-            {friends.slice(0, 8).map((friend) => (
+            {safeFriends.slice(0, 8).map((friend) => (
               <li key={`${friend.name}-${friend.lastPlayedAt}`}>
                 {friend.name} <span className="hint">({formatDate(friend.lastPlayedAt)})</span>
               </li>
             ))}
-            {!friends.length ? <li className="hint">Пока пусто.</li> : null}
+            {!safeFriends.length ? <li className="hint">Пока пусто.</li> : null}
           </ul>
         </div>
         <div className="mini-card">
           <strong>Последние матчи</strong>
           <ul className="history">
-            {matches.slice(0, 8).map((match) => (
+            {safeMatches.slice(0, 8).map((match) => (
               <li key={match.gameId}>
                 {match.result === "win" ? "Победа" : "Поражение"} vs {match.opponentName}{" "}
                 <span className="hint">({formatDate(match.finishedAt)})</span>
               </li>
             ))}
-            {!matches.length ? <li className="hint">Пока пусто.</li> : null}
+            {!safeMatches.length ? <li className="hint">Пока пусто.</li> : null}
           </ul>
         </div>
       </div>

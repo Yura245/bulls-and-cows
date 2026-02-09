@@ -26,14 +26,52 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
+function isFriendEntry(value: unknown): value is FriendEntry {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "name" in value &&
+      "lastPlayedAt" in value &&
+      typeof (value as { name?: unknown }).name === "string" &&
+      typeof (value as { lastPlayedAt?: unknown }).lastPlayedAt === "string"
+  );
+}
+
+function isMatchEntry(value: unknown): value is MatchEntry {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "gameId" in value &&
+      "roomCode" in value &&
+      "opponentName" in value &&
+      "result" in value &&
+      "turns" in value &&
+      "finishedAt" in value &&
+      typeof (value as { gameId?: unknown }).gameId === "string" &&
+      typeof (value as { roomCode?: unknown }).roomCode === "string" &&
+      typeof (value as { opponentName?: unknown }).opponentName === "string" &&
+      ((value as { result?: unknown }).result === "win" || (value as { result?: unknown }).result === "lose") &&
+      typeof (value as { turns?: unknown }).turns === "number" &&
+      typeof (value as { finishedAt?: unknown }).finishedAt === "string"
+  );
+}
+
 export function getFriends(): FriendEntry[] {
   if (typeof window === "undefined") return [];
-  return parseJson<FriendEntry[]>(window.localStorage.getItem(STORAGE_FRIENDS), []);
+  const parsed = parseJson<unknown>(window.localStorage.getItem(STORAGE_FRIENDS), []);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.filter(isFriendEntry);
 }
 
 export function getMatchHistory(): MatchEntry[] {
   if (typeof window === "undefined") return [];
-  return parseJson<MatchEntry[]>(window.localStorage.getItem(STORAGE_MATCH_HISTORY), []);
+  const parsed = parseJson<unknown>(window.localStorage.getItem(STORAGE_MATCH_HISTORY), []);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.filter(isMatchEntry);
 }
 
 export function addOrUpdateFriend(name: string) {
