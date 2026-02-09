@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { MusicPlayer } from "@/components/music-player";
+import type { RoomStateDto } from "@/lib/dto";
 import { persistSoundPrefs, playSfx, readSoundPrefs, syncMusicEngine } from "@/lib/sound";
 
 type Theme = "light" | "dark";
@@ -20,7 +21,13 @@ function applyUi(theme: Theme, skin: Skin, contrast: boolean) {
   root.setAttribute("data-contrast", contrast ? "high" : "normal");
 }
 
-export function UiControls() {
+type Props = {
+  roomCode?: string;
+  roomMusic?: RoomStateDto["settings"]["music"] | null;
+  spectatorKey?: string;
+};
+
+export function UiControls({ roomCode, roomMusic, spectatorKey }: Props) {
   const [theme, setTheme] = useState<Theme>("light");
   const [skin, setSkin] = useState<Skin>("classic");
   const [highContrast, setHighContrast] = useState(false);
@@ -141,7 +148,7 @@ export function UiControls() {
         </label>
       </div>
 
-      <MusicPlayer />
+      <MusicPlayer roomCode={roomCode} roomMusic={roomMusic} spectatorKey={spectatorKey} />
     </section>
   );
 }

@@ -9,6 +9,10 @@ type RoomRow = {
   status: RoomStateDto["status"];
   expires_at: string;
   turn_seconds: number;
+  music_track_index: number;
+  music_is_playing: boolean;
+  music_started_at: string | null;
+  music_updated_at: string;
   spectator_code: string;
   host_user_id: string;
 };
@@ -29,7 +33,7 @@ async function getRoomByCode(roomCode: string): Promise<RoomRow> {
   const admin = getSupabaseAdmin();
   const { data: roomData, error: roomError } = await admin
     .from("rooms")
-    .select("id, code, status, expires_at, turn_seconds, spectator_code, host_user_id")
+    .select("id, code, status, expires_at, turn_seconds, music_track_index, music_is_playing, music_started_at, music_updated_at, spectator_code, host_user_id")
     .eq("code", roomCode)
     .maybeSingle();
 
@@ -182,7 +186,13 @@ async function loadStateForViewer(
       viewerRole,
       settings: {
         turnSeconds: room.turn_seconds,
-        isHost
+        isHost,
+        music: {
+          trackIndex: room.music_track_index,
+          isPlaying: room.music_is_playing,
+          startedAt: room.music_started_at,
+          updatedAt: room.music_updated_at
+        }
       },
       spectatorPath: viewerRole === "player" ? `/watch/${room.code}?key=${room.spectator_code}` : null,
       players: players.map((player) => ({
@@ -250,7 +260,13 @@ async function loadStateForViewer(
     viewerRole,
     settings: {
       turnSeconds: room.turn_seconds,
-      isHost
+      isHost,
+      music: {
+        trackIndex: room.music_track_index,
+        isPlaying: room.music_is_playing,
+        startedAt: room.music_started_at,
+        updatedAt: room.music_updated_at
+      }
     },
     spectatorPath: viewerRole === "player" ? `/watch/${room.code}?key=${room.spectator_code}` : null,
     players: players.map((player) => ({

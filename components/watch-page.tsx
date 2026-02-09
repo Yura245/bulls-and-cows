@@ -142,7 +142,7 @@ export function WatchPage({ code, spectatorKey }: Props) {
           {mobileMenuOpen ? <button type="button" className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню" /> : null}
 
           <aside className={`room-side mobile-side ${mobileMenuOpen ? "open" : ""}`}>
-            <UiControls />
+            <UiControls roomCode={roomCode} roomMusic={state.settings.music} spectatorKey={spectatorKey} />
             <section className="card" style={{ marginBottom: 14 }}>
               <h2 className="section-title">Игроки</h2>
               <div className="players-grid">

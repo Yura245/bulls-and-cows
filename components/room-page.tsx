@@ -711,7 +711,7 @@ export function RoomPage({ code }: Props) {
           {mobileMenuOpen ? <button type="button" className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню" /> : null}
 
           <aside className={`room-side mobile-side ${mobileMenuOpen ? "open" : ""}`}>
-            <UiControls />
+            <UiControls roomCode={roomCode} roomMusic={roomState.settings.music} />
 
             <section className="card fade-in" style={{ marginBottom: 14 }}>
               <h2 className="section-title">Игроки</h2>

@@ -1,4 +1,4 @@
-import { ROOM_CODE_LENGTH, TURN_SECONDS_OPTIONS } from "@/lib/constants";
+import { ROOM_CODE_LENGTH, SHARED_MUSIC_TRACKS, TURN_SECONDS_OPTIONS } from "@/lib/constants";
 import { HttpError } from "@/lib/errors";
 
 const NUMBER_4_NO_REPEAT_REGEX = /^\d{4}$/;
@@ -52,4 +52,21 @@ export function ensureChatMessage(value: unknown): string {
     throw new HttpError(400, "INVALID_CHAT_MESSAGE", "Сообщение слишком длинное (максимум 300 символов).");
   }
   return message;
+}
+
+export function ensureMusicAction(value: unknown): "toggle" | "next" {
+  const action = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (action !== "toggle" && action !== "next") {
+    throw new HttpError(400, "INVALID_MUSIC_ACTION", "Поддерживаются действия: toggle, next.");
+  }
+  return action;
+}
+
+export function normalizeTrackIndex(value: number): number {
+  const trackCount = SHARED_MUSIC_TRACKS.length;
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const safe = Math.floor(value);
+  return ((safe % trackCount) + trackCount) % trackCount;
 }

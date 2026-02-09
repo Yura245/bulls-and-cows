@@ -48,6 +48,12 @@ export type RoomStateDto = {
   settings: {
     turnSeconds: number;
     isHost: boolean;
+    music: {
+      trackIndex: number;
+      isPlaying: boolean;
+      startedAt: string | null;
+      updatedAt: string;
+    };
   };
   spectatorPath: string | null;
   players: RoomPlayerDto[];

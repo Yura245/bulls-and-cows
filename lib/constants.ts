@@ -20,6 +20,12 @@ export const ROOM_EVENT_TYPES = [
   "player_left",
   "chat_message",
   "turn_timeout",
-  "settings_updated"
+  "settings_updated",
+  "music_updated"
 ] as const;
 export type RoomEventType = (typeof ROOM_EVENT_TYPES)[number];
+
+export const SHARED_MUSIC_TRACKS = [
+  "/music/casap-akim-ok-pardon-slowed.mp3",
+  "/music/new-jeans-jersey-club-remix-slowed.mp3"
+] as const;
