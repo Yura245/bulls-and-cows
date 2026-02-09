@@ -576,6 +576,10 @@ export function RoomPage({ code }: Props) {
                       <strong>Секрет</strong>
                       <span>{roomState.game.mySecretSet ? "задан" : "не задан"}</span>
                     </div>
+                    <div className="mini-card">
+                      <strong>Ваше число</strong>
+                      <span>{roomState.game.mySecretSet ? roomState.game.mySecret ?? "----" : "----"}</span>
+                    </div>
                   </div>
                 </section>
 

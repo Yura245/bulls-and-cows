@@ -223,20 +223,23 @@ async function loadStateForViewer(
   }
 
   let mySecretSet = false;
+  let mySecret: string | null = null;
   let opponentSecretSet = false;
 
   if (viewerSeat) {
     const { data: secretsData, error: secretsError } = await admin
       .from("game_secrets")
-      .select("seat, is_set")
+      .select("seat, is_set, secret")
       .eq("game_id", latestGame.id);
 
-    const secrets = (secretsData as { seat: number; is_set: boolean }[] | null) ?? [];
+    const secrets = (secretsData as { seat: number; is_set: boolean; secret: string | null }[] | null) ?? [];
     if (secretsError) {
       throw secretsError;
     }
 
-    mySecretSet = Boolean(secrets.find((entry) => entry.seat === viewerSeat)?.is_set);
+    const ownSecret = secrets.find((entry) => entry.seat === viewerSeat);
+    mySecretSet = Boolean(ownSecret?.is_set);
+    mySecret = ownSecret?.secret ?? null;
     opponentSecretSet = Boolean(secrets.find((entry) => entry.seat !== viewerSeat)?.is_set);
   }
 
@@ -266,6 +269,7 @@ async function loadStateForViewer(
       winnerSeat: latestGame.winner_seat,
       mySeat: viewerSeat,
       mySecretSet,
+      mySecret,
       opponentSecretSet,
       history: history.map((turn) => ({
         turnNo: turn.turn_no,

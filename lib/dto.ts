@@ -31,6 +31,7 @@ export type GameDto = {
   winnerSeat: 1 | 2 | null;
   mySeat: 1 | 2 | null;
   mySecretSet: boolean;
+  mySecret: string | null;
   opponentSecretSet: boolean;
   history: GuessDto[];
   rematchVotes: {

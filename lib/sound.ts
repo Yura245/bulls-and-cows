@@ -7,8 +7,11 @@ const STORAGE_SOUND_ENABLED = "bac_sound_enabled";
 const STORAGE_MUSIC_ENABLED = "bac_music_enabled";
 const STORAGE_SOUND_PACK = "bac_sound_pack";
 
+const MUSIC_TRACKS = ["/music/casap-akim-ok-pardon-slowed.mp3", "/music/new-jeans-jersey-club-remix-slowed.mp3"] as const;
+
 let audioContext: AudioContext | null = null;
-let musicTimer: number | null = null;
+let musicAudio: HTMLAudioElement | null = null;
+let musicTrackIndex = 0;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -133,53 +136,75 @@ function playPatternSoft(kind: SfxKind) {
   }
 }
 
+function ensureMusicElement(): HTMLAudioElement | null {
+  if (!isBrowser()) return null;
+  if (musicAudio) return musicAudio;
+
+  const audio = new Audio();
+  audio.preload = "none";
+  audio.volume = 0.28;
+  audio.addEventListener("ended", () => {
+    musicTrackIndex = (musicTrackIndex + 1) % MUSIC_TRACKS.length;
+    void playCurrentTrack();
+  });
+  audio.addEventListener("error", () => {
+    musicTrackIndex = (musicTrackIndex + 1) % MUSIC_TRACKS.length;
+    void playCurrentTrack();
+  });
+
+  musicAudio = audio;
+  return musicAudio;
+}
+
+async function playCurrentTrack() {
+  if (!getMusicEnabled()) return;
+  const audio = ensureMusicElement();
+  if (!audio) return;
+  if (!MUSIC_TRACKS.length) return;
+
+  const nextSrc = MUSIC_TRACKS[musicTrackIndex];
+  if (!audio.src || !audio.src.endsWith(nextSrc)) {
+    audio.src = nextSrc;
+  }
+
+  try {
+    await audio.play();
+  } catch {
+    // Browser may block autoplay until user gesture.
+  }
+}
+
+function stopMusic() {
+  if (!musicAudio) return;
+  musicAudio.pause();
+  musicAudio.currentTime = 0;
+}
+
 export function playSfx(kind: SfxKind) {
   if (!getSoundEnabled()) return;
   const pack = getSoundPack();
   if (pack === "arcade") {
     playPatternArcade(kind);
-    return;
-  }
-  if (pack === "soft") {
+  } else if (pack === "soft") {
     playPatternSoft(kind);
-    return;
+  } else {
+    playPatternClassic(kind);
   }
-  playPatternClassic(kind);
-}
 
-function playMusicTick() {
-  const pack = getSoundPack();
-  if (pack === "arcade") {
-    playTone(260, 130, "square", 0.02);
-    setTimeout(() => playTone(330, 100, "square", 0.015), 180);
-    return;
+  if (getMusicEnabled()) {
+    void playCurrentTrack();
   }
-  if (pack === "soft") {
-    playTone(220, 180, "sine", 0.012);
-    setTimeout(() => playTone(277, 150, "sine", 0.012), 240);
-    return;
-  }
-  playTone(246, 140, "triangle", 0.016);
-  setTimeout(() => playTone(311, 130, "triangle", 0.016), 210);
 }
 
 export function syncMusicEngine() {
   if (!isBrowser()) return;
 
   if (!getMusicEnabled()) {
-    if (musicTimer !== null) {
-      window.clearInterval(musicTimer);
-      musicTimer = null;
-    }
+    stopMusic();
     return;
   }
 
-  if (musicTimer !== null) {
-    return;
-  }
-
-  playMusicTick();
-  musicTimer = window.setInterval(playMusicTick, 2600);
+  void playCurrentTrack();
 }
 
 export function persistSoundPrefs(options: { soundEnabled: boolean; musicEnabled: boolean; soundPack: SoundPack }) {
